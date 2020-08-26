@@ -83,14 +83,11 @@ under.do! Then LP :- Then (_\ std.do! LP) _.
 %%%%% HB Utils %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % runs P in a context where Coq #[attributes] are parsed
-pred with-attributes i:prop.
-with-attributes P :-
+pred with-attributes i:list attribute-signature, i:prop.
+with-attributes Extra P :-
   attributes A,
-  coq.parse-attributes A [
-    att "verbose" bool,
-    att "mathcomp" bool,
-    att "mathcomp.axiom" string,
-  ] Opts, !,
+  std.append [att "verbose" bool] Extra Attributes,
+  coq.parse-attributes A Attributes Opts, !,
   Opts => P.
 
 pred if-verbose i:prop.
@@ -104,7 +101,10 @@ if-MC-compat P :- get-option "mathcomp.axiom" S, !,
   P (some GR).
 if-MC-compat _.
 
-
+pred with-locality i:prop.
+with-locality P :-
+  if (get-option "local" tt) (A = @local!) (A = @global!),
+  A => P.
 
 % TODO: Should this only be used for gref that are factories? (and check in the first/second branch so?)
 % Should we make this an HO predicate, eg "located->gref S L is-factory? GR"
@@ -1030,7 +1030,7 @@ declare-instances T [class Class Struct MLwP|Rest] :-
   std.assert-ok! (coq.typecheck S STy) "declare-instances: S illtyped",
 
   coq.env.add-const Name S STy @transparent! CS, % Bug coq/coq#11155, could be a Let
-  coq.CS.declare-instance (const CS), % Bug coq/coq#11155, should be local
+  with-locality (coq.CS.declare-instance (const CS)), % Bug coq/coq#11155, should be local
   declare-instances T Rest.
 declare-instances T [_|Rest] :- declare-instances T Rest.
 declare-instances _ [].

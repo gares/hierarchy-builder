@@ -213,6 +213,9 @@ Elpi Export HB.status.
   - [MixinName.Build T] abbreviation for the constructor of the factory
 
   Note: [T of f1 T & … & fN T] is ssreflect syntax for [T (_ : f1 T) … (_ : fN T)]
+
+  Supported attributes: #[verbose]
+
 *)
 
 Elpi Command HB.mixin.
@@ -221,7 +224,7 @@ Elpi Accumulate Db hb.db.
 Elpi Accumulate lp:{{
 
 main [A] :- A = indt-decl _, !,
-  with-attributes (main-declare-asset {argument->asset A} asset-mixin).
+  with-attributes [] (main-declare-asset {argument->asset A} asset-mixin).
 
 main _ :-
   coq.error "Usage: HB.mixin Record <MixinName> T of F A & … := { … }.".
@@ -242,6 +245,8 @@ Elpi Export HB.mixin.
   HB.structure Definition StructureName := { A of Factory1 A & … & FactoryN A }.
   HB.structure Definition StructureName := { A of Factory1 A & … & FactoryN A & }.
   >>
+
+  Supported attributes: #[verbose]
 
 *)
 
@@ -271,7 +276,10 @@ sigT->list-w-params {{ lib:@hb.sigT _ lp:{{ fun N Ty B }} }} L C :-
 
 main [const-decl Module (some B) _] :- !, std.do! [
   sigT->list-w-params B GRFS ClosureCheck, !,
-  with-attributes (main-declare-structure Module GRFS ClosureCheck),
+  with-attributes
+    [ att "mathcomp" bool,
+      att "mathcomp.axiom" string ]
+    (main-declare-structure Module GRFS ClosureCheck),
 ].
 main _ :- coq.error "Usage: HB.structure Definition <ModuleName> := { A of <Factory1> A & … & <FactoryN> A }".
 }}.
@@ -294,12 +302,15 @@ Elpi Export HB.structure.
     HB.instance Definition N Params := Factory.Build Params T …
     >>
 
+    Supported attributes: #[local], #[verbose]
 *)
 
 Elpi Command HB.instance.
 Elpi Accumulate File "hb.elpi".
 Elpi Accumulate Db hb.db.
 Elpi Accumulate lp:{{
+
+macro @attributes :- [att "local" bool].
 
 main [const-decl Name (some BodySkel) TyWPSkel] :- !, std.do! [
   std.assert-ok! (coq.elaborate-arity-skeleton TyWPSkel _ TyWP) "Definition type illtyped",
@@ -309,10 +320,10 @@ main [const-decl Name (some BodySkel) TyWPSkel] :- !, std.do! [
      % Do not open a section when it is not necessary (no parameters)
      % A side effect of opening a section is loosing meta data associated
      % with instances, in particular builder tags are lost
-     with-attributes (if-verbose (coq.say  "skipping section opening")),
+     with-attributes @attributes (if-verbose (coq.say  "skipping section opening")),
      SectionBody = Body
    ) (
-    with-attributes (if-verbose (coq.say  "opening instance section" TyWP)),
+    with-attributes @attributes (if-verbose (coq.say  "opening instance section" TyWP)),
     SectionName is "hb_instance_" ^ {term_to_string {new_int} },
     coq.env.begin-section SectionName,
     postulate-arity TyWP [] Body SectionBody SectionTy
@@ -323,7 +334,8 @@ main [const-decl Name (some BodySkel) TyWPSkel] :- !, std.do! [
   std.assert! (factory-nparams Factory NParams) "Not a factory synthesized by HB",
   coq.env.add-const Name SectionBody _ @transparent! C,
   std.appendR {coq.mk-n-holes NParams} [T|_] Args,
-  with-attributes (main-declare-canonical-instances T (global (const C))),
+  with-attributes @attributes
+    (main-declare-canonical-instances T (global (const C))),
 
   if (TyWP = arity _) true (
     if-verbose (coq.say "closing instance section"),
@@ -333,8 +345,7 @@ main [const-decl Name (some BodySkel) TyWPSkel] :- !, std.do! [
 main [T0, F0] :-
   argument->ty T0 T, !, % TODO: change this when supporting morphism hierarchies
   argument->term F0 F, !,
-  with-attributes
-    (main-declare-canonical-instances T F).
+  with-attributes @attributes (main-declare-canonical-instances T F).
 main _ :- coq.error "Usage: HB.instance <CarrierType> <FactoryInstanceTerm>*\nUsage: HB.instance Definition <Name> := <Builder> T ...".
 
 }}.
@@ -352,7 +363,7 @@ Elpi Accumulate File "hb.elpi".
 Elpi Accumulate Db hb.db.
 Elpi Accumulate lp:{{
 main [A] :- !,
-  with-attributes (main-declare-asset {argument->asset A} asset-factory).
+  with-attributes [] (main-declare-asset {argument->asset A} asset-factory).
 
 main _ :-
   coq.error "Usage: HB.factory Record <FactoryName> T of F A & … := { … }.\nUsage: HB.factory Definition <FactoryName> T of F A := t.".
@@ -392,13 +403,15 @@ Elpi Export HB.factory.
     - for each structure inhabited via [HB.instance] it defined all
       builders to known mixins
 
+    Supported attributes: #[verbose]
+
     *)
 
 Elpi Command HB.builders.
 Elpi Accumulate File "hb.elpi".
 Elpi Accumulate Db hb.db.
 Elpi Accumulate lp:{{
-main [ctx-decl C] :- !, with-attributes (main-begin-declare-builders C).
+main [ctx-decl C] :- !, with-attributes [] (main-begin-declare-builders C).
 
 main _ :- coq.error "Usage: HB.builders Context A (f : F1 A).".
 }}.
@@ -410,7 +423,7 @@ Elpi Command HB.end.
 Elpi Accumulate File "hb.elpi".
 Elpi Accumulate Db hb.db.
 Elpi Accumulate lp:{{
-main [] :- !, with-attributes main-end-declare-builders.
+main [] :- !, with-attributes [] main-end-declare-builders.
 main _ :- coq.error "Usage: HB.end.".
 }}.
 Elpi Typecheck.
