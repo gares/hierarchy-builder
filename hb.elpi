@@ -80,6 +80,198 @@ list-eq-set L1 L2 :- list-diff L1 L2 [], list-diff L2 L1 [].
 pred under.do! i:((A -> Prop) -> A -> prop), i:list prop.
 under.do! Then LP :- Then (_\ std.do! LP) _.
 
+%%%%% Logging Utils %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+pred logger o:list coq.pp, o:bool.
+
+pred logger-extend i:list coq.pp, i:coq.pp.
+logger-extend [] _ :- coq.error "HB: logger was closed".
+logger-extend (uvar as X) V :- X = [V|FRESH_].
+logger-extend [_|XS] V :- logger-extend XS V.
+
+pred logger-close i:list coq.pp.
+logger-close (uvar as X) :- X = [].
+logger-close [_|XS] :- logger-close XS.
+
+pred log-vernac i:coq.vernac.
+log-vernac V :- logger L Nice, !,
+  if (Nice = tt) (PPALL = []) (PPALL = [@ppall!]),
+  logger-extend L {PPALL => coq.vernac->pp [V]}.
+log-vernac _.
+
+pred with-logging i:prop.
+with-logging P :- get-option "log" tt, !,
+  logger L tt => P,
+  logger-close L,
+  std.intersperse coq.pp.spc L PP,
+  coq.pp->string (coq.pp.box (coq.pp.v 0) PP) S,
+  coq.say "(* \n" S "\n*)".
+with-logging P :- get-option "elpi.log_hb" _, !, % env variable
+  get-option "elpi.loc" Loc,
+  rex_split "," Loc [FILE|_],
+  FILENAME is FILE ^ ".hb",
+  open_append FILENAME OC1,
+  std.string.concat "\n" ["","HIERARCHY BUILDER PATCH",Loc,""] PATCH1,
+  output OC1 PATCH1,
+  close_out OC1,
+  logger L ff => P,
+  logger-close L,
+  std.intersperse coq.pp.spc L PP,
+  coq.pp->string (coq.pp.box (coq.pp.v 0) PP) S,
+  open_append FILENAME OC2,
+  output OC2 S,
+  close_out OC2.
+with-logging P :- P.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Coq document
+
+% This is a very minimalistic AST to represent a Coq document equipped with
+% pretty printing facilities.
+%
+% When "complete enough" this should be moved to coq-elpi proper.
+
+kind coq.vernac type.
+type coq.vernac.begin-module  string -> option string       -> coq.vernac.
+type coq.vernac.end-module    string                        -> coq.vernac.
+type coq.vernac.begin-section string                        -> coq.vernac.
+type coq.vernac.end-section   string                        -> coq.vernac.
+type coq.vernac.import-module string                        -> coq.vernac.
+type coq.vernac.export-module string                        -> coq.vernac.
+type coq.vernac.definition    string -> option term -> term -> coq.vernac.
+type coq.vernac.variable      string -> term                -> coq.vernac.
+type coq.vernac.inductive     indt-decl                     -> coq.vernac.
+type coq.vernac.abbreviation  string -> int -> term         -> coq.vernac.
+type coq.vernac.coercion      string -> gref -> class       -> coq.vernac.
+type coq.vernac.canonical     string                        -> coq.vernac.
+type coq.vernac.implicit      string -> list implicit_kind  -> coq.vernac.
+type coq.vernac.comment       A                             -> coq.vernac.
+
+% The main entry point to print vernacular commands is coq.vernac->pp
+
+{
+shorten coq.vernac.{ begin-module , end-module , begin-section, end-section }.
+shorten coq.vernac.{ import-module , export-module }.
+shorten coq.vernac.{ definition , variable , comment }.
+shorten coq.{ vernac.inductive , vernac.implicit }.
+shorten coq.vernac.{ canonical , abbreviation , coercion }.
+shorten coq.pp.{ box , h , spc , v , str , hv , hov, glue, brk }.
+
+pred coq.vernac->pp i:list coq.vernac, o:coq.pp.
+coq.vernac->pp L (box (v 0) L2) :-
+  std.map L coq.vernac->pp1 L1,
+  std.intersperse spc L1 L2.
+
+pred coq.vernac->pp1 i:coq.vernac, o:coq.pp.
+coq.vernac->pp1 (begin-module Name none) PP :-
+  PP = box h [str "Module ", str Name, str "."].
+coq.vernac->pp1 (begin-module Name (some TyName)) PP :-
+  PP = box h [str "Module ", str Name, str " : ", str TyName, str "."].
+coq.vernac->pp1 (end-module Name) PP :-
+  PP = box h [str "End ", str Name, str "."].
+coq.vernac->pp1 (begin-section Name) PP :-
+  PP = box h [str "Section ", str Name, str "."].
+coq.vernac->pp1 (end-section Name) PP :-
+  PP = box h [str "End ", str Name, str "."].
+coq.vernac->pp1 (definition Name none Body) PP :-
+  PP = box (hv 2) [str "Definition ", str Name, str " :=", spc, B, str "."],
+  coq.term->pp Body B.
+coq.vernac->pp1 (definition Name (some Ty) Body) PP :-
+  PP = box (hv 2) [str "Definition ", str Name, str " : ", T, str " :=", spc, B, str "."],
+  coq.term->pp Ty T,
+  coq.term->pp Body B.
+coq.vernac->pp1 (variable Name Ty) (box (hv 2) [box h [str "Variable ", str Name, str " :"], spc, TY, str "."]) :-
+  coq.term->pp Ty TY.
+coq.vernac->pp1 (import-module Name) (box h [str "Import ", str Name, str "."]).
+coq.vernac->pp1 (export-module Name) (box h [str "Export ", str Name, str "."]).
+coq.vernac->pp1 (abbreviation Name NParams Term) (box (hv 2) [box h [str "Notation ",str Name|StrParams], str " :=", spc, B, str "."]) :-
+  coq.vernac->ppabbrterm NParams Term StrParams B.
+coq.vernac->pp1 (canonical Name) (box h [str "Canonical ", str Name, str "."]).
+coq.vernac->pp1 (coercion Name SRC TGT) (box h [str "Coercion ", str Name, str " : ", str S, str " >-> ", str T, str "."]) :-
+  coq.gref->path SRC SP, std.string.concat "." {std.take-last 2 SP} S,
+  if2 (TGT = sortclass) (T = "Sortclass")
+      (TGT = funclass)  (T = "Funclass")
+                        (TGT = grefclass GR, coq.gref->path GR GRP, std.string.concat "." {std.take-last 2 GRP} T).
+coq.vernac->pp1 (vernac.inductive I) PP :-
+  coq.vernac->ppinductive I [] PP.
+coq.vernac->pp1 (vernac.implicit Name []) (box h [str "Arguments ", str Name, str " : clear implicits."]).
+coq.vernac->pp1 (vernac.implicit Name L) (box h [str "Arguments ", str Name, spc, glue PP, str "."]) :-
+  std.map L coq.vernac->ppimparg PP1,
+  std.intersperse spc PP1 PP.
+coq.vernac->pp1 (comment A) (box (hov 2) [str"(*", str S, str"*)"]) :-
+  std.any->string A S.
+
+
+pred coq.vernac->ppimparg i:implicit_kind, o:coq.pp.
+coq.vernac->ppimparg explicit (str "_").
+coq.vernac->ppimparg maximal  (str "{_}").
+coq.vernac->ppimparg implicit (str "[_]").
+
+pred coq.vernac->ppinductive i:indt-decl, i:list (pair implicit_kind term), o:coq.pp.
+coq.vernac->ppinductive (parameter ID IMPL TY I) Acc R :-
+  @pi-parameter ID TY p\ coq.vernac->ppinductive (I p) [pr IMPL p|Acc] R.
+coq.vernac->ppinductive (record ID SORT KID RD) ParamsRev PP :-
+  PP = (box (hov 0) [
+         box (hov 0) [str "Record", spc, str ID, brk 1 4, glue ParamsPP,
+                      str " : ", SortPP, brk 1 2, str":= ", str KID],
+         brk 1 2,
+         box (hv 2) [str"{", spc, glue FieldsPP, str"}"],
+         str"."]),
+  std.rev ParamsRev Params,
+  coq.vernac->ppinductiveparams Params ParamsPP,
+  coq.term->pp SORT SortPP,
+  coq.vernac->pprecordfields RD FieldsPP.
+coq.vernac->ppinductive (inductive ID IsInd Arity Ks) ParamsRev PP :-
+  PP = (box (hov 0) [
+         str CO,str "Inductive", spc,
+         box (hov 0) [
+           str ID, brk 1 4, glue ParamsPP, ArityPP, str " :="],
+         brk 0 2,
+         box (hv 2) [str"  ", glue KsPp],
+         str "."]),
+  std.rev ParamsRev Params,
+  coq.vernac->ppinductiveparams Params ParamsPP,
+  std.map Params snd ParamsAsArgs,
+  if (IsInd = tt) (CO = "") (CO = "Co"),
+  coq.arity->pp Arity ArityPP,
+  @pi-inductive ID Arity x\
+    coq.mk-app x ParamsAsArgs (X x),
+    coq.vernac->ppinductiveconstructor (Ks (X x)) KsPp.
+
+pred coq.vernac->ppinductiveconstructor i:list indc-decl, o:list coq.pp.
+coq.vernac->ppinductiveconstructor [] [].
+coq.vernac->ppinductiveconstructor [constructor ID Arity|Ks] PP :-
+  PP = [str ID,{coq.arity->pp Arity},SEP|Rest],
+  if (Ks = []) (SEP = str"") (SEP = glue [brk 1 0, str "| "]),
+  coq.vernac->ppinductiveconstructor Ks Rest.
+
+pred coq.vernac->ppinductiveparams i:list (pair implicit_kind term), o:list coq.pp.
+coq.vernac->ppinductiveparams [] [].
+coq.vernac->ppinductiveparams [pr Imp T|Rest] PP :-
+  PP = [box (hov 2) [str A,str ID,str " : ", TY,str B]|PPRest],
+  decl T Name Ty, coq.name->id Name ID, coq.term->pp Ty TY,
+  if2 (Imp = explicit) (A = "(", B = ")")
+      (Imp = maximal)  (A = "{", B = "}")
+                       (A = "[", B = "]"),
+  coq.vernac->ppinductiveparams Rest PPRest.
+
+pred coq.vernac->pprecordfields i:record-decl, o:list coq.pp. 
+coq.vernac->pprecordfields end-record [].
+coq.vernac->pprecordfields (field _ ID TY F) [ str ID, str " : ", TYPP, str ";", spc|FPP] :- % TODO attributes
+  coq.term->pp TY TYPP,
+  @pi-parameter ID TY p\ coq.vernac->pprecordfields (F p) FPP.
+
+pred coq.vernac->ppabbrterm i:int, i:term, o:list coq.pp, o:coq.pp.
+coq.vernac->ppabbrterm 0 T [] B :- !, @holes! => coq.term->pp T B.
+coq.vernac->ppabbrterm N (fun _ _ F) [spc,str ID|StrParams] B :-
+  ID is "X" ^ {std.any->string N},
+  coq.id->name ID Name,
+  M is N - 1,
+  @pi-decl Name (sort prop) x\ coq.vernac->ppabbrterm M (F x) StrParams B.
+
+}
+
 %%%%% HB Utils %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -106,6 +298,7 @@ with-attributes P :-
     att "mathcomp.axiom" string,
     att "infer" attmap,
     att "key" string,
+    att "log" bool,
   ] Opts, !,
   Opts => P.
 
@@ -399,6 +592,7 @@ w-params_1 X Y :- w-params.then X ignore ignore (p\ t\ triple_1) Y.
 pred hb-set-implicit i:gref, i:list implicit_kind.
 hb-set-implicit GR I :-  std.do! [
   coq.arguments.set-implicit GR [I],
+  log-vernac (coq.vernac.implicit {coq.gref->id GR} I),
 ].
 
 
@@ -410,6 +604,7 @@ hb-add-const Name Bo Ty Opaque C :- std.do! [
     true,
   coq.env.add-const Name Bo Ty Opaque C,
   if (var Ty) (Ty? = none) (Ty? = some Ty),
+  log-vernac (coq.vernac.definition Name Ty? Bo),
   hb-set-implicit (const C) [],
 ].
 
@@ -417,6 +612,7 @@ pred hb-add-variable i:id, i:term, o:constant.
 hb-add-variable Name Ty C :- std.do! [
   if (Name = "_") (ID is "fresh_name_" ^ {std.any->string {new_int}}) (ID = Name),
   coq.env.add-section-variable ID Ty C,
+  log-vernac (coq.vernac.variable ID Ty),
   hb-set-implicit (const C) [],
 ].
 
@@ -426,47 +622,61 @@ hb-add-indt Decl I :- std.do! [
     (coq.error "HB: cannot infer some information in" {coq.indt-decl->string Decl})
     true,
   coq.env.add-indt Decl I,
+  log-vernac (coq.vernac.inductive Decl),
 ].
 
 pred hb-begin-module i:id.
 hb-begin-module Name :- std.do! [
   coq.env.begin-module Name none,
+  log-vernac (coq.vernac.begin-module Name none),
 ].
 
 pred hb-end-module i:id, o:modpath.
-hb-end-module _ M :- std.do! [
+hb-end-module Name M :- std.do! [
   coq.env.end-module M,
+  log-vernac (coq.vernac.end-module Name),
 ].
 
 pred hb-begin-section i:id.
 hb-begin-section Name :- std.do! [
   coq.env.begin-section Name,
+  log-vernac (coq.vernac.begin-section Name),
 ].
 
 pred hb-end-section i:id.
-hb-end-section _ :- std.do! [
+hb-end-section Name :- std.do! [
   coq.env.end-section,
+  log-vernac (coq.vernac.end-section Name),
 ].
 
 pred hb-declare-instance i:gref.
 hb-declare-instance GR  :- std.do! [
   coq.CS.declare-instance GR,
+  coq.gref->id GR Name,
+  log-vernac (coq.vernac.canonical Name),
 ].
 
 pred hb-add-abbreviation i:id, i:int, i:term, i:bool, o:abbreviation.
 hb-add-abbreviation Name NArgs Body OnlyParsing O :- std.do! [
   coq.notation.add-abbreviation Name NArgs Body OnlyParsing O,
+  log-vernac (coq.vernac.abbreviation Name NArgs Body),
 ].
 
 
 pred hb-export-module i:modpath.
 hb-export-module M :- std.do! [
   coq.env.export-module M,
+  coq.modpath->path M MP,
+  std.take-last 2 MP MPNice,
+  log-vernac (coq.vernac.export-module {std.string.concat "." MPNice}),
 ].
 
 pred hb-coercion-declare i:coercion.
 hb-coercion-declare C :- std.do! [
   coq.coercion.declare C,
+  C = coercion GR _ SRCGR TGTCL,
+  coq.gref->id GR Name,
+  log-vernac (coq.vernac.coercion Name SRCGR TGTCL),
 ].
 
 %%%%%%%%% HB database %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -475,6 +685,7 @@ hb-coercion-declare C :- std.do! [
 pred hb-accumulate i:scope, i:clause.
 hb-accumulate S CL :- std.do! [
   coq.elpi.accumulate S "hb.db" CL,
+  if-verbose (log-vernac (coq.vernac.comment CL)),
 ].
 
 pred from_mixin i:prop, o:mixinname.
@@ -574,14 +785,14 @@ toposort-mixins In Out :- std.do! [
 ].
 
 pred toposort-proj i:(A -> B -> prop), i:list (pair B B), i:list A, o:list A.
-toposort-proj Proj ES In Out :- !, toposort-proj.acc Proj ES [] In Out.
+toposort-proj Proj ES In Out :- !, toposort-proj.hb-accumulate Proj ES [] In Out.
 pred topo-find i:B, o:A.
-pred toposort-proj.acc i:(A -> B -> prop), i:list (pair B B), i:list B, i:list A, o:list A.
-toposort-proj.acc _ ES Acc [] Out :- !,
+pred toposort-proj.hb-accumulate i:(A -> B -> prop), i:list (pair B B), i:list B, i:list A, o:list A.
+toposort-proj.hb-accumulate _ ES Acc [] Out :- !,
   std.map {toposort ES Acc} topo-find Out.
-toposort-proj.acc Proj ES Acc [A|In] Out :- std.do![
+toposort-proj.hb-accumulate Proj ES Acc [A|In] Out :- std.do![
   Proj A B,
-  topo-find B A => toposort-proj.acc Proj ES [B|Acc] In Out
+  topo-find B A => toposort-proj.hb-accumulate Proj ES [B|Acc] In Out
 ].
 
 % Classes can be topologically sorted according to the subclass relation
@@ -996,9 +1207,9 @@ mk-phant-abbrev N (phant-term AL T1) C Abbrev :- std.do! [
   @global! => hb-add-abbreviation N NParams AbbrevT tt Abbrev,
 ].
 
-% [acc-phant-abbrev Str GR PhGR Abbrev] makes a phantom abbreviation for F
-pred acc-phant-abbrev i:string, i:gref, o:gref, o:abbreviation.
-acc-phant-abbrev Str GR (const PhC) Abbrev :- !, std.do! [
+% [hb-accumulate-phant-abbrev Str GR PhGR Abbrev] makes a phantom abbreviation for F
+pred hb-accumulate-phant-abbrev i:string, i:gref, o:gref, o:abbreviation.
+hb-accumulate-phant-abbrev Str GR (const PhC) Abbrev :- !, std.do! [
   mk-phant-term GR PhGR,
   mk-phant-abbrev Str PhGR PhC Abbrev
 ].
@@ -1222,7 +1433,7 @@ mk-factory-abbrev Str GR Aliases FactAbbrev :- !, std.do! [
   if (factory-alias->gref GR _)
      (Aliases = [],
       FactAbbrev = factory-by-classname GR)
-     (acc-phant-abbrev Str GR PhGR Abbrv,
+     (hb-accumulate-phant-abbrev Str GR PhGR Abbrv,
       Aliases = [phant-abbrev GR PhGR Abbrv],
       FactAbbrev = factory-by-phantabbrev Abbrv),
 ].
@@ -1767,7 +1978,7 @@ main-declare-structure Module GRFSwP ClosureCheck :- std.do! [
   ClassAlias => Factories => GRDepsClauses =>
     declare-unification-hints SortProjection ClassProjection CurrentClass NewJoins,
   % Register in Elpi's DB the new structure
-  % NOT TODO: All these acc are correctly locaed in an Export Module
+  % NOT TODO: All these hb-accumulate are correctly locaed in an Export Module
 
   if (ClassName = indt ClassInd) (std.do![
     if-verbose (coq.say "HB: exporting coercions from class to mixins"),

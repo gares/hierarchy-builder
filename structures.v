@@ -1,13 +1,16 @@
+(* Support constants, to be kept in sync with shim/structures.v *)
 From Coq Require Import String ssreflect ssrfun.
-From elpi Require Import elpi.
 Export String.StringSyntax.
 
-(** Technical definition from /Canonical Structures for the working Coq user/ *)
 Definition unify T1 T2 (t1 : T1) (t2 : T2) (s : option (string * Type)) :=
   phantom T1 t1 -> phantom T2 t2.
 Definition id_phant {T} {t : T} (x : phantom T t) := x.
 Definition nomsg : option (string * Type) := None.
 Definition is_not_canonically_a : string := "is not canonically a".
+Definition new {T} (x : T) := x.
+
+(* ********************* structures ****************************** *)
+From elpi Require Import elpi.
 
 Register unify as hb.unify.
 Register id_phant as hb.id.
@@ -20,7 +23,6 @@ Register Coq.Init.Datatypes.prod as hb.prod.
 Register Coq.Init.Specif.sigT as hb.sigT.
 Register Coq.ssr.ssreflect.phant as hb.phant.
 Register Coq.ssr.ssreflect.Phant as hb.Phant.
-Definition new {T} (x : T) := x.
 Register new as hb.new.
 
 #[deprecated(since="HB 1.0.1", note="use #[key=...] instead")]
@@ -246,8 +248,11 @@ Elpi Accumulate File "hb.elpi".
 Elpi Accumulate Db hb.db.
 Elpi Accumulate lp:{{
 
-main [A] :- A = indt-decl _, !,
-  with-attributes (main-declare-asset {argument->asset A} asset-mixin).
+main [A] :- A = indt-decl _, !, std.do! [
+  with-attributes (with-logging (
+    main-declare-asset {argument->asset A} asset-mixin
+  )),
+].
 
 main _ :-
   coq.error "Usage: HB.mixin Record <MixinName> T of F A & … := { … }.".
@@ -298,7 +303,9 @@ sigT->list-w-params {{ lib:@hb.sigT _ lp:{{ fun N Ty B }} }} L C :-
 main [const-decl Module (some B) _] :- !, std.do! [
   purge-id B B1, std.assert-ok! (coq.elaborate-skeleton B1 _ B2) "illtyped structure definition",
   sigT->list-w-params B2 GRFS ClosureCheck, !,
-  with-attributes (main-declare-structure Module GRFS ClosureCheck),
+  with-attributes (with-logging (
+    main-declare-structure Module GRFS ClosureCheck
+  )),
 ].
 main _ :- coq.error "Usage: HB.structure Definition <ModuleName> := { A of <Factory1> A & … & <FactoryN> A }".
 }}.
@@ -329,17 +336,17 @@ Elpi Accumulate Db hb.db.
 Elpi Accumulate lp:{{
 
 main [const-decl Name (some BodySkel) TyWPSkel] :- !, std.do! [
-  with-attributes (
+  with-attributes (with-logging (
       main-declare-const-instance Name BodySkel TyWPSkel
-  ),
+  )),
 ].
 main [T0, F0] :- std.do! [
   argument->ty T0 T, % TODO: change this when supporting morphism hierarchies
   argument->term F0 F,
-  with-attributes (
+  with-attributes (with-logging (
       main-declare-instance T F Clauses,
       std.forall Clauses (x\hb-accumulate current (clause _ _ x))
-  ),
+  )),
 ].
 
 main _ :- coq.error "Usage: HB.instance <CarrierType> <FactoryInstanceTerm>*\nUsage: HB.instance Definition <Name> := <Builder> T ...".
@@ -359,7 +366,9 @@ Elpi Accumulate File "hb.elpi".
 Elpi Accumulate Db hb.db.
 Elpi Accumulate lp:{{
 main [A] :- !,
-  with-attributes (main-declare-asset {argument->asset A} asset-factory).
+  with-attributes (with-logging (
+    main-declare-asset {argument->asset A} asset-factory
+  )).
 
 main _ :-
   coq.error "Usage: HB.factory Record <FactoryName> T of F A & … := { … }.\nUsage: HB.factory Definition <FactoryName> T of F A := t.".
@@ -405,7 +414,10 @@ Elpi Command HB.builders.
 Elpi Accumulate File "hb.elpi".
 Elpi Accumulate Db hb.db.
 Elpi Accumulate lp:{{
-main [ctx-decl C] :- !, with-attributes (main-begin-declare-builders C).
+main [ctx-decl C] :- !,
+  with-attributes (with-logging (
+    main-begin-declare-builders C
+  )).
 
 main _ :- coq.error "Usage: HB.builders Context A (f : F1 A).".
 }}.
@@ -417,7 +429,10 @@ Elpi Command HB.end.
 Elpi Accumulate File "hb.elpi".
 Elpi Accumulate Db hb.db.
 Elpi Accumulate lp:{{
-main [] :- !, with-attributes main-end-declare-builders.
+main [] :- !,
+  with-attributes (with-logging (
+    main-end-declare-builders
+  )).
 main _ :- coq.error "Usage: HB.end.".
 }}.
 Elpi Typecheck.
@@ -445,7 +460,7 @@ Elpi Command HB.export.
 Elpi Accumulate File "hb.elpi".
 Elpi Accumulate Db hb.db.
 Elpi Accumulate lp:{{
-main [str M] :- !, with-attributes (export {coq.locate-module M}).
+main [str M] :- !, with-attributes (with-logging (export {coq.locate-module M})).
 main _ :- coq.error "Usage: HB.export M.".
 }}.
 Elpi Typecheck.
@@ -462,7 +477,7 @@ Elpi Command HB.reexport.
 Elpi Accumulate File "hb.elpi".
 Elpi Accumulate Db hb.db.
 Elpi Accumulate lp:{{
-main [] :- !, with-attributes (main-reexport).
+main [] :- !, with-attributes (with-logging main-reexport).
 main _ :- coq.error "Usage: HB.reexport.".
 }}.
 Elpi Typecheck.

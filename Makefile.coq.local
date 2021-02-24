@@ -14,3 +14,26 @@ structures.vo : hb.elpi
 #  $(foreach M,$(shell seq 0 10),\
 #   $(foreach K,$(shell seq 0 10),\
 #     $(eval $(call MKRULE,$(N),$(M),$(K))))))
+
+pre-all:: hb
+
+hb: hb.ml
+	$(SHOW)'OCAMLC hb.ml -o hb'
+	$(HIDE) ocamlc unix.cma str.cma -g hb.ml -o hb
+
+ifneq "$(DESTDIR)" ""
+HB_INSTALLDIR := $(DESTDIR)/bin
+else
+HB_INSTALLDIR := $(dir $(shell which $(COQBIN)coqc))
+endif
+
+install-extra::
+	$(SHOW)'install hb $(HB_INSTALLDIR)'
+	$(HIDE) install -d $(HB_INSTALLDIR)
+	$(HIDE) install -m 0755 hb $(HB_INSTALLDIR)
+
+clean::
+	$(SHOW)'CLEAN *.hb *.hb.old ./hb'
+	$(HIDE) find . -name \*.hb -delete
+	$(HIDE) find . -name \*.hb.old -delete
+	$(HIDE) rm -f hb
