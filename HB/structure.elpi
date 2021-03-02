@@ -58,8 +58,10 @@ declare Module GRFSwP ClosureCheck :- std.do! [
   if-verbose (coq.say "HB: start module Exports"),
 
   log.coq.env.begin-module "Exports",
-  if-arg-sort (private.declare-sort-coercion Structure (global (const ArgSortCst))),
-  private.declare-sort-coercion Structure SortProjection,
+
+  private.detect-coe-class MLwP TgtClass,
+  if-arg-sort (private.declare-sort-coercion Structure (global (const ArgSortCst)) TgtClass),
+  private.declare-sort-coercion Structure SortProjection TgtClass,
 
   if-verbose (coq.say "HB: exporting unification hints"),
   ClassAlias => Factories => GRDepsClauses =>
@@ -89,7 +91,7 @@ declare Module GRFSwP ClosureCheck :- std.do! [
 
   if-verbose (coq.say "HB: declaring of_ abbreviation"),
 
-  private.mk-infer-key ClassProjection NilwP (global Structure) PhClass,
+  private.mk-infer-key TgtClass ClassProjection NilwP (global Structure) PhClass,
 
   phant.add-abbreviation "of_" PhClass _ ClassOfAbbrev,
   (pi c\ coq.notation.abbreviation ClassOfAbbrev [c] (ClassOfAbbrev_ c)),
@@ -142,6 +144,13 @@ declare Module GRFSwP ClosureCheck :- std.do! [
 namespace private {
 
 shorten coq.{ term->gref, subst-fun, safe-dest-app, mk-app, mk-eta, subst-prod }.
+
+pred detect-coe-class i:list-w-params A, o:class.
+detect-coe-class (w-params.nil _ {{ Type }} _) sortclass.
+detect-coe-class (w-params.nil _ {{ _ -> _ }} _) funclass.
+detect-coe-class (w-params.nil _ _ _) _ :- coq.error "FIXME".
+detect-coe-class (w-params.cons N T F) Out :-
+  @pi-decl N T p\ detect-coe-class (F p) Out.
 
 % const Po : forall p1 .. pm T m1 .. mn, Extra  (Eg Extra = forall x y, x + y = y + z)
 % const C : forall p1 .. pm s, Extra
@@ -269,7 +278,7 @@ mk-coe-structure-body StructureF StructureT TC Coercion SortProjection ClassProj
     {coq.mk-n-holes {factory-nparams TC}} PackPH,
 
   SCoeBody = {{ fun s : lp:StructureP =>
-     let T : Type := lp:SortP s in
+     let T := lp:SortP s in
      lp:PackPH T (lp:CoercionP T (lp:ClassP s)) }},
 ].
 
@@ -424,12 +433,12 @@ declare-class+structure MLwP (indt ClassInd) (indt StructureInd) SortProjection 
 ].
 
 % Declares "sort" as a coercion Structurename >-> Sortclass
-pred declare-sort-coercion i:structure, i:term.
-declare-sort-coercion StructureName (global Proj) :-
+pred declare-sort-coercion i:structure, i:term, i:class.
+declare-sort-coercion StructureName (global Proj) CoeClass :-
 
   if-verbose (coq.say "HB: declare sort coercion"),
 
-  log.coq.coercion.declare (coercion Proj 0 StructureName sortclass).
+  log.coq.coercion.declare (coercion Proj 0 StructureName CoeClass).
 
 pred if-class-already-exists-error i:id, i:list class, i:list mixinname.
 if-class-already-exists-error _ [] _.
@@ -529,7 +538,7 @@ mk-infer T (w-params.nil _ _ _) PH :- phant.init T PH.
 mk-infer T (w-params.cons N Ty W) R :-
   coq.name->id N ID, (get-option ID "Type" ; get-option ID ""), !,
   @pi-decl N Ty t\ mk-infer {mk-app T [t]} (W t) (PhT t),
-  phant.fun-infer-type N Ty PhT R.
+  phant.fun-infer-type sortclass N Ty PhT R.
 mk-infer T (w-params.cons N Ty W) R :-
   coq.name->id N ID, not (get-option ID _), !,
   @pi-decl N Ty t\ mk-infer {mk-app T [t]} (W t) (PhT t),
@@ -537,12 +546,12 @@ mk-infer T (w-params.cons N Ty W) R :-
 mk-infer _ (w-params.cons N _ _) _ :- coq.name->id N ID, get-option ID Infer,
   coq.error "Automatic inference of paramter" N "from" Infer "not supported".
 
-pred mk-infer-key i:term, i:list-w-params mixinname, i:term, o:phant-term.
-mk-infer-key K (w-params.nil N _ _) St PhK :-
+pred mk-infer-key i:class, i:term, i:list-w-params mixinname, i:term, o:phant-term.
+mk-infer-key C K (w-params.nil N _ _) St PhK :-
   @pi-decl N St t\ phant.init {mk-app K [t]} (PhKBo t),
-  phant.fun-infer-type N St PhKBo PhK.
-mk-infer-key K (w-params.cons N Ty W) St R :-
-  @pi-decl N Ty t\ mk-infer-key {mk-app K [t]} (W t) {mk-app St [t]} (PhT t),
+  phant.fun-infer-type C N St PhKBo PhK.
+mk-infer-key C K (w-params.cons N Ty W) St R :-
+  @pi-decl N Ty t\ mk-infer-key C {mk-app K [t]} (W t) {mk-app St [t]} (PhT t),
   phant.fun-implicit N Ty PhT R.
 
 pred if-coverage-not-good-error i:list mixinname.

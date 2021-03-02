@@ -20,6 +20,8 @@ Register Coq.Init.Datatypes.prod as hb.prod.
 Register Coq.Init.Specif.sigT as hb.sigT.
 Register Coq.ssr.ssreflect.phant as hb.phant.
 Register Coq.ssr.ssreflect.Phant as hb.Phant.
+Register Coq.ssr.ssreflect.phantom as hb.phantom.
+Register Coq.ssr.ssreflect.Phantom as hb.Phantom.
 Definition new {T} (x : T) := x.
 Register new as hb.new.
 
@@ -28,10 +30,10 @@ Notation indexed T := T (only parsing).
 
 Declare Scope HB_scope.
 Notation "{  A  'of'  P  &  ..  &  Q  }" :=
-  (sigT (fun A : Type => (prod P .. (prod Q True) ..)%type))
+  (sigT (fun A => (prod P .. (prod Q True) ..)%type))
   (at level 0, A at level 99) : HB_scope.
 Notation "{  A  'of'  P  &  ..  &  Q  &  }" :=
-  (sigT (fun A : Type => (prod P .. (prod Q False) ..)%type))
+  (sigT (fun A => (prod P .. (prod Q False) ..)%type))
   (at level 0, A at level 99) : HB_scope.
 Global Open Scope HB_scope.
 
