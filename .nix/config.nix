@@ -35,15 +35,19 @@
       rocq-core.override.version = "master";
       stdlib.override.version = "master";
       rocq-elpi.override.version = "master";
-      rocq-elpi.override.elpi-version = "3.0.1";
       bignums.override.version = "master";
     }; coqPackages = mcHBcommon // {
       coq.override.version = "master";
       stdlib.override.version = "master";
       coq-elpi.override.version = "master";
-      coq-elpi.override.elpi-version = "3.0.1";
       bignums.override.version = "master";
       coquelicot.job = false;
+    }; };
+
+    "rocq-9.2" = { rocqPackages = {
+      rocq-core.override.version = "9.2";
+    }; coqPackages = mcHBcommon // {
+      coq.override.version = "9.2";
     }; };
 
     "rocq-9.1" = { rocqPackages = {
