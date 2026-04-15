@@ -1,7 +1,7 @@
 [![Actions Status](https://github.com/math-comp/hierarchy-builder/workflows/CI/badge.svg)](https://github.com/math-comp/hierarchy-builder/actions)
 [![project chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://coq.zulipchat.com/#narrow/stream/237868-Hierarchy-Buidlder)
 
-<img align="right" src="https://github.com/math-comp/hierarchy-builder/raw/master/etc/rocqy-hb.png" alt="HB logo" width="25%" />
+<img align="right" src="https://github.com/math-comp/hierarchy-builder/raw/master/etc/rocqy-hb.png" alt="HB logo" width="30%" />
 
 ### Hierarchy Builder
 
