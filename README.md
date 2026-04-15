@@ -1,7 +1,9 @@
 [![Actions Status](https://github.com/math-comp/hierarchy-builder/workflows/CI/badge.svg)](https://github.com/math-comp/hierarchy-builder/actions)
 [![project chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://coq.zulipchat.com/#narrow/stream/237868-Hierarchy-Buidlder)
 
-# Hierarchy Builder
+<img align="right" src="https://github.com/math-comp/hierarchy-builder/raw/master/etc/rocqy-hb.png" alt="HB logo" width="25%" />
+
+### Hierarchy Builder
 
 Hierarchy Builder (HB) provides high level commands to declare a hierarchy of algebraic structure
 (or interfaces if you prefer the glossary of computer science) for the Coq system.
